@@ -23,7 +23,7 @@ func hasCorrectContentType(r *http.Request) bool {
 	return false
 }
 
-// ParseJSON() unmarshals a request body in JSON format. Requires the request to possess a body and have Content-Type=application/json
+// ParseJSON() unmarshals a JSON body. Requires the request to possess a body and have Content-Type=application/json
 func ParseJSON(r *http.Request) (map[string]interface{}, *error.APIError) {
 	if !hasCorrectContentType(r) {
 		badContentTypeError := error.NewAPIError("/request/headers/contentType", http.StatusBadRequest, "Incorrect or missing content-type header", "The following request uses JSONParserMiddleware, which requires content-type to be application/json", r.RequestURI)

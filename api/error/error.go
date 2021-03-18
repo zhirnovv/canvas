@@ -47,13 +47,12 @@ func (apiErr *APIError) WriteTo(w http.ResponseWriter) {
 		}
 
 		apiParseError := NewAPIError("/internal/json/parse", http.StatusInternalServerError, "Error parsing JSON error body", parseError.Error(), instance)
-
 		apiParseError.WriteTo(w)
+
+		return
 	}
 
-	w.WriteHeader(apiErr.Status)
 	w.Header().Add("Content-Type", "application/json")
-
 	w.Write(errorJSON)
 }
 
