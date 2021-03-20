@@ -7,9 +7,9 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/rs/cors"
-	"github.com/zhirnovv/gochat/api/handlers"
-	"github.com/zhirnovv/gochat/api/socketManager"
-	"github.com/zhirnovv/gochat/api/user"
+	"github.com/zhirnovv/canvas/api/handlers"
+	"github.com/zhirnovv/canvas/api/socketManager"
+	"github.com/zhirnovv/canvas/api/user"
 )
 
 var address = "127.0.0.1:8000"

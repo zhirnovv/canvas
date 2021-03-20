@@ -2,9 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
-	"github.com/zhirnovv/gochat/api/bodyParser"
-	"github.com/zhirnovv/gochat/api/error"
-	"github.com/zhirnovv/gochat/api/user"
+	"github.com/zhirnovv/canvas/api/bodyParser"
+	"github.com/zhirnovv/canvas/api/error"
+	"github.com/zhirnovv/canvas/api/user"
 	"net/http"
 )
 

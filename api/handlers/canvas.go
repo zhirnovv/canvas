@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/zhirnovv/gochat/api/error"
-	"github.com/zhirnovv/gochat/api/socketManager"
-	"github.com/zhirnovv/gochat/api/user"
+	"github.com/zhirnovv/canvas/api/error"
+	"github.com/zhirnovv/canvas/api/socketManager"
+	"github.com/zhirnovv/canvas/api/user"
 	"net/http"
 )
 

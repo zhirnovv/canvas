@@ -2,7 +2,7 @@ package bodyParser
 
 import (
 	"encoding/json"
-	"github.com/zhirnovv/gochat/api/error"
+	"github.com/zhirnovv/canvas/api/error"
 	"io/ioutil"
 	"net/http"
 )

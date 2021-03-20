@@ -3,7 +3,7 @@ package socketManager
 import (
 	"encoding/json"
 	"github.com/gorilla/websocket"
-	"github.com/zhirnovv/gochat/api/user"
+	"github.com/zhirnovv/canvas/api/user"
 )
 
 // Client represents a user connected to a certain manager via a websocket
