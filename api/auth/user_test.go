@@ -5,14 +5,20 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/zhirnovv/canvas/api/user"
 )
 
-var userAuthenticator = NewUserAuthenticator("secret")
+var userStorage = user.NewUserStorage()
+var userAuthenticator = NewUserAuthenticator(userStorage, "secret")
 
 func TestUserAuthenticatorTokenIssue(t *testing.T) {
-	uuid := uuid.New()
+	newUser, err := userAuthenticator.Storage.Create("test user")
 
-	tokenString, err := userAuthenticator.IssueToken(uuid)
+	if err != nil {
+		t.Error(err)
+	}
+
+	tokenString, err := userAuthenticator.Issue(newUser.ID)
 
 	if err != nil {
 		t.Error(err)
@@ -32,29 +38,37 @@ func TestUserAuthenticatorTokenIssue(t *testing.T) {
 }
 
 func TestUserAuthenticator(t *testing.T) {
-	uuid := uuid.New()
-
-	token, err := userAuthenticator.IssueToken(uuid)
+	newUser, err := userAuthenticator.Storage.Create("test user")
 
 	if err != nil {
 		t.Error(err)
 	}
 
-	decodedUuid, err := userAuthenticator.DecodeToken(token)
+	token, err := userAuthenticator.Issue(newUser.ID)
 
 	if err != nil {
 		t.Error(err)
 	}
 
-	if uuid != decodedUuid {
-		t.Errorf("UUID and decoded UUID don't match. UUID is %s, while decoded UUID is %s", uuid.String(), decodedUuid.String())
+	decodedUuid, err := userAuthenticator.VerifyAndDecode(token)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if newUser.ID != decodedUuid {
+		t.Errorf("UUID and decoded UUID don't match. UUID is %s, while decoded UUID is %s", newUser.ID.String(), decodedUuid.(uuid.UUID).String())
 	}
 }
 
 func TestUserAuthenticatorMangledTokenDecode(t *testing.T) {
-	uuid := uuid.New()
+	newUser, err := userAuthenticator.Storage.Create("test user")
 
-	token, err := userAuthenticator.IssueToken(uuid)
+	if err != nil {
+		t.Error(err)
+	}
+
+	token, err := userAuthenticator.Issue(newUser.ID)
 
 	if err != nil {
 		t.Error(err)
@@ -62,7 +76,7 @@ func TestUserAuthenticatorMangledTokenDecode(t *testing.T) {
 
 	token = token[:len(token)-1]
 
-	_, err = userAuthenticator.DecodeToken(token)
+	_, err = userAuthenticator.VerifyAndDecode(token)
 
 	if err == nil {
 		t.Error("The token was altered, but no error was thrown")
@@ -71,9 +85,13 @@ func TestUserAuthenticatorMangledTokenDecode(t *testing.T) {
 }
 
 func TestTokenExpiration(t *testing.T) {
-	uuid := uuid.New()
+	newUser, err := userAuthenticator.Storage.Create("test user")
 
-	token, err := userAuthenticator.IssueToken(uuid)
+	if err != nil {
+		t.Error(err)
+	}
+
+	token, err := userAuthenticator.Issue(newUser.ID)
 
 	if err != nil {
 		t.Error(err)
@@ -83,7 +101,7 @@ func TestTokenExpiration(t *testing.T) {
 
 	time.Sleep(time.Second * 6)
 
-	_, err = userAuthenticator.DecodeToken(token)
+	_, err = userAuthenticator.VerifyAndDecode(token)
 
 	if err == nil {
 		t.Error("The token is expired, but no error was thrown")
