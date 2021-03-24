@@ -2,20 +2,31 @@ package socketManager
 
 import (
 	"encoding/json"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/zhirnovv/canvas/api/bodyParser"
 	"github.com/zhirnovv/canvas/api/user"
 )
 
 // Client represents a user connected to a certain manager via a websocket
 type Client struct {
-	UserData        *user.User
-	assignedSocket  *websocket.Conn
-	assignedManager *Manager
-	MessagesToSend  chan []byte // Messages to forward to client.
+	ID                uuid.UUID
+	UserData          *user.User
+	assignedSocket    *websocket.Conn
+	assignedManager   *Manager
+	assignedMessenger Messenger
+	MessagesToSend    chan []byte
 }
 
-func NewClient(userData *user.User, socket *websocket.Conn, manager *Manager) *Client {
-	return &Client{UserData: userData, assignedSocket: socket, assignedManager: manager, MessagesToSend: make(chan []byte)}
+func NewClient(userData *user.User, socket *websocket.Conn, manager *Manager, messenger Messenger) *Client {
+	return &Client{
+		ID:                uuid.New(),
+		UserData:          userData,
+		assignedSocket:    socket,
+		assignedManager:   manager,
+		assignedMessenger: messenger,
+		MessagesToSend:    make(chan []byte),
+	}
 }
 
 func (client *Client) ListenToSocket() {
@@ -26,32 +37,48 @@ func (client *Client) ListenToSocket() {
 
 	for {
 		_, data, err := client.assignedSocket.ReadMessage()
+
 		if err != nil {
-			// TODO: error handling here
+			errorMessage := NewMessage("/error/message/failedToRead", map[string]interface{}{
+				"error": "Could not read message.",
+			})
+
+			client.assignedManager.sendMessage(client.ID, errorMessage)
 			break
 		}
 
-		var dataJSON map[string]interface{}
-		parseErr := json.Unmarshal(data, &dataJSON)
+		var unmarshalledMessage map[string]interface{}
+		parseErr := json.Unmarshal(data, &unmarshalledMessage)
 
 		if parseErr != nil {
-			// TODO: error handling here
+			errorMessage := NewMessage("/error/message/invalidJson", map[string]interface{}{
+				"error": parseErr.Error(),
+			})
+			client.assignedManager.sendMessage(client.ID, errorMessage)
+
 			break
 		}
 
-		messageType, messageTypeExists := dataJSON["type"].(string)
+		var decodedMessage Message
+		decodeErr := bodyParser.DecodeAndValidate(unmarshalledMessage, &decodedMessage)
 
-		if !messageTypeExists {
-			break
+		if decodeErr != nil {
+			errorMessage := NewMessage("/error/message/invalidJson", map[string]interface{}{
+				"error": parseErr.Error(),
+			})
+			client.assignedManager.sendMessage(client.ID, errorMessage)
 		}
 
-		messageData, messageDataExists := dataJSON["data"]
+		parsedMessage, isError, shouldBroadcast := client.assignedMessenger.Parse(decodedMessage)
 
-		if !messageDataExists {
-			break
+		if isError {
+			client.assignedManager.sendMessage(client.ID, parsedMessage)
+		} else if shouldBroadcast {
+			client.assignedManager.MessagesToBroadcast <- parsedMessage
+		} else {
+			client.assignedManager.sendMessage(client.ID, parsedMessage)
 		}
 
-		client.assignedManager.MessagesToBroadcast <- NewMessage(messageType, messageData)
 	}
 }
 

@@ -14,8 +14,8 @@ func getClientDoesNotExistError(id uuid.UUID) error {
 // Manager represents a socket manager. A socket manager can accept, validate and rebroadcast messages from its clients.
 type Manager struct {
 	clients             map[uuid.UUID]*Client // Client map by according user ID.
-	ClientsToAttach   chan *Client
-	ClientsToDetach chan *Client
+	ClientsToAttach     chan *Client
+	ClientsToDetach     chan *Client
 	MessagesToBroadcast chan Message
 }
 
@@ -23,20 +23,33 @@ type Manager struct {
 func NewManager() *Manager {
 	return &Manager{
 		clients:             make(map[uuid.UUID]*Client),
-		ClientsToAttach:   make(chan *Client),
-		ClientsToDetach: make(chan *Client),
+		ClientsToAttach:     make(chan *Client),
+		ClientsToDetach:     make(chan *Client),
 		MessagesToBroadcast: make(chan Message),
 	}
 }
 
 // AttachClient() attaches a provided client to the manager.
 func (manager *Manager) attachClient(client *Client) {
-	manager.clients[client.UserData.ID] = client
+	manager.clients[client.ID] = client
+
+	message, isError, shouldBroadcast := client.assignedMessenger.OnOpen()
+
+	if isError {
+		manager.detachClient(client)
+		return
+	}
+
+	if shouldBroadcast {
+		manager.broadcastMessage(message)
+	} else {
+		manager.sendMessage(client.ID, message)
+	}
 }
 
 // DetachClient() detaches a client from the manager.
 func (manager *Manager) detachClient(client *Client) error {
-	id := client.UserData.ID
+	id := client.ID
 
 	_, exists := manager.clients[id]
 	if !exists {
@@ -48,40 +61,44 @@ func (manager *Manager) detachClient(client *Client) error {
 	return nil
 }
 
-// broadcastMessage() validates, marshals and broadcasts a message to all clients attached to the manager.
-func (manager *Manager) broadcastMessage(message Message) error {
+func (manager *Manager) broadcastMessage(message Message) {
 	messageJSON, marshalErr := json.Marshal(message)
 
 	if marshalErr != nil {
-		return marshalErr
+		return
 	}
 
 	for _, client := range manager.clients {
 		client.MessagesToSend <- messageJSON
 	}
-
-	return nil
 }
 
-// sendMessage() sends a message to a specific client.
-func (manager *Manager) sendMessage(clientId uuid.UUID, message Message) error {
+func (manager *Manager) sendMessage(clientId uuid.UUID, message Message) {
 	client, exists := manager.clients[clientId]
+
 	if !exists {
-		return getClientDoesNotExistError(clientId)
+		return
 	}
 
 	messageJSON, marshalErr := json.Marshal(message)
 
 	if marshalErr != nil {
-		return marshalErr
+		errorMessage := NewMessage("/error/message/invalid", map[string]interface{}{
+			"error": marshalErr,
+		})
+
+		errorMessageJSON, _ := json.Marshal(errorMessage)
+
+		client.MessagesToSend <- errorMessageJSON
 	}
 
 	client.MessagesToSend <- messageJSON
 
-	return nil
+	return
 }
 
-func (manager *Manager) run() {
+// Run() initializes the manager.
+func (manager *Manager) Run() {
 	for {
 		select {
 		case client := <-manager.ClientsToAttach:

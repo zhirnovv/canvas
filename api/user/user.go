@@ -8,7 +8,7 @@ import (
 
 // User represents a chat user.
 type User struct {
-	ID   uuid.UUID `json:"id"`   // The unique identifier of a user.
+	ID   uuid.UUID `json:"id"`                                // The unique identifier of a user.
 	Name string    `json:"name"` // The name of a user.
 }
 
