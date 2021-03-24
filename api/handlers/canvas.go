@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"fmt"
+	"net/http"
+
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/zhirnovv/canvas/api/error"
+	"github.com/zhirnovv/canvas/api/jsonResponse"
+	"github.com/zhirnovv/canvas/api/middleware"
 	"github.com/zhirnovv/canvas/api/socketManager"
 	"github.com/zhirnovv/canvas/api/user"
-	"net/http"
 )
 
 var upgrader = websocket.Upgrader{
@@ -15,43 +17,40 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-func AddClientHandler(userStorage *user.UserStorage, manager *socketManager.Manager) http.HandlerFunc {
+func AddClientHandler(userStorage *user.UserStorage, manager *socketManager.Manager, messenger socketManager.Messenger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userId := r.Header.Get("Authorization")
+		var response jsonResponse.JSONResponse
 
-		if userId == "" {
-			noIdError := error.NewAPIError("/canvas/client/noId", http.StatusBadRequest, "User ID was not provided", "Please provide a user id.", r.RequestURI)
-			noIdError.WriteTo(w)
+		userUUID, uuidIsCorrect := r.Context().Value(middleware.UUIDKey).(uuid.UUID)
+
+		if !uuidIsCorrect {
+			response = jsonResponse.NewErrorResponse("/canvas/client/noUserUUID", http.StatusUnauthorized, "No user UUID was found in authentication token", "", r.RequestURI)
+			response.WriteTo(w)
 			return
 		}
 
-		uuid, uuidErr := uuid.Parse(userId)
-
-		if uuidErr != nil {
-			badUUIDErr := error.NewAPIError("/canvas/client/badUuid", http.StatusBadRequest, "UUID is incorrect", "Please provide a valid uuid", r.RequestURI)
-			badUUIDErr.WriteTo(w)
-			return
-		}
-
-		user, userDoesNotExist := userStorage.Read(uuid)
+		user, userDoesNotExist := userStorage.Read(userUUID)
 
 		if userDoesNotExist != nil {
-			noUserError := error.NewAPIError("/canvas/client/noUser", http.StatusForbidden, "User does not exist", fmt.Sprintf("User with id %s does not exist in userStorage", userId), r.RequestURI)
-			noUserError.WriteTo(w)
+			response = jsonResponse.NewErrorResponse("/canvas/client/noUser", http.StatusForbidden, "User does not exist", fmt.Sprintf("User with id %s does not exist in userStorage", userUUID), r.RequestURI)
+			response.WriteTo(w)
 			return
+		}
+
+		upgrader.CheckOrigin = func(r *http.Request) bool {
+			if r.Header.Get("Origin") == "http://dev.domain.com:8080" {
+				return true
+			}
+			return false
 		}
 
 		socket, socketErr := upgrader.Upgrade(w, r, nil)
 
 		if socketErr != nil {
-			socketCreationErr := error.NewAPIError("/canvas/client/socketErr", http.StatusInternalServerError, "Failed to create socket", socketErr.Error(), r.RequestURI)
-			socketCreationErr.WriteTo(w)
 			return
 		}
 
-		client := socketManager.NewClient(user, socket, manager)
-
-		fmt.Println(client)
+		client := socketManager.NewClient(user, socket, manager, messenger)
 
 		manager.ClientsToAttach <- client
 
