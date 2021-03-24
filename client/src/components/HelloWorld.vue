@@ -1,56 +1,164 @@
 <template>
-  <div class="hello">
-    <h2>{{ uuid }}</h2>
+  <div class="Container">
+    <div class="Navbar">
+      <Typography :variant="'h3'">Drawing Board</Typography>
+      <Typography :variant="'h5'">{{ authorizedUsername }}</Typography>
+    </div>
+    <DrawingBoard :isAutenticated="isAuthorized" />
+    <Modal :isOpen="isUnauthorized">
+      <template v-slot:header>
+        <Typography :variant="'h3'">Please enter your name</Typography>
+      </template>
+      <template v-slot:body>
+        <Input
+          :placeholder="'alphanumeric username'"
+          :disabled="isLoading"
+          :error="usernameInputError"
+          v-model="username"
+          class="Auth-modal-input"
+        />
+      </template>
+      <template v-slot:footer>
+        <Button
+          :disabled="isLoading"
+          @click="register"
+          class="Auth-modal-submit-button"
+        >
+          <Typography :color="'secondary'">Submit</Typography>
+        </Button>
+      </template>
+    </Modal>
   </div>
 </template>
 
 <script lang="ts">
-import { Component, Prop, Vue } from "vue-property-decorator";
-import { io } from "socket.io-client";
+import { Component, Vue } from "vue-property-decorator";
+import DrawingBoard from "./Canvas.vue";
+import Button from "../molecules/Button.vue";
+import Modal from "../molecules/Modal.vue";
+import Input from "../molecules/Input.vue";
+import Typography from "../atoms/Typography.vue";
 
-@Component
+export interface ApiResponse {
+  meta: {
+    type?: string;
+    instance: string;
+    status: number;
+  };
+}
+
+export interface ApiSuccessResponse<Data> extends ApiResponse {
+  data: Data;
+}
+
+export interface ApiErrorResponse extends ApiResponse {
+  error: {
+    title: string;
+    detail: string;
+  };
+}
+
+enum AuthStatus {
+  Initial = "initial",
+  Authorized = "authorized",
+  Unauthorized = "unauthorized",
+}
+
+@Component({
+  components: {
+    DrawingBoard,
+    Modal,
+    Typography,
+    Button,
+    Input,
+  },
+})
 export default class HelloWorld extends Vue {
-  @Prop() private msg!: string;
+  public username = "";
+  public usernameInputError = "";
+  public isLoading = false;
+  public authorizedUsername = "";
 
-  private socket = new WebSocket("ws://localhost:8000/canvas/client");
-  private uuid: string = "";
+  private authStatus = AuthStatus.Initial;
 
-  public mounted() {
-    this.register();
+  get isUnauthorized() {
+    return this.authStatus === AuthStatus.Unauthorized;
   }
 
-  private async register() {
-    const response = await fetch("http://localhost:8000/auth", {
+  get isAuthorized() {
+    return this.authStatus === AuthStatus.Authorized;
+  }
+
+  mounted() {
+    this.authorize();
+  }
+
+  public async register() {
+    this.isLoading = true;
+    console.log(this.username);
+
+    const response = await fetch("http://dev.domain.com:8000/auth", {
       method: "POST",
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ name: "General Grievous" }),
+      body: JSON.stringify({ name: this.username }),
     });
 
     if (response.ok) {
-      const result = await response.json();
-
-      console.log(result);
+      this.authorize();
+    } else {
+      const result = (await response.json()) as ApiErrorResponse;
+      this.usernameInputError = result.error.detail;
     }
+
+    this.isLoading = false;
+  }
+
+  private async authorize() {
+    this.isLoading = true;
+
+    const response = await fetch("http://dev.domain.com:8000/auth", {
+      method: "GET",
+      credentials: "include",
+    });
+
+    if (response.ok) {
+      const result = (await response.json()) as ApiSuccessResponse<{
+        user: { name: string };
+      }>;
+
+      this.authorizedUsername = result.data.user.name;
+      this.authStatus = AuthStatus.Authorized;
+    } else {
+      this.authStatus = AuthStatus.Unauthorized;
+    }
+
+    this.isLoading = false;
   }
 }
 </script>
 
-<!-- Add "scoped" attribute to limit CSS to this component only -->
-<style scoped>
-h3 {
-  margin: 40px 0 0;
+<style scoped lang="scss">
+@import "../assets/palette.scss";
+
+.Container {
+  height: 100vh;
+  display: flex;
+  flex-flow: column nowrap;
 }
-ul {
-  list-style-type: none;
-  padding: 0;
-}
-li {
-  display: inline-block;
-  margin: 0 10px;
-}
-a {
-  color: #42b983;
+
+.Navbar {
+  width: 100%;
+  padding: 16px;
+  display: flex;
+  flex-flow: row nowrap;
+  justify-content: space-between;
+  align-items: center;
+
+  background: white;
+  border-radius: 5px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.25);
 }
 </style>
